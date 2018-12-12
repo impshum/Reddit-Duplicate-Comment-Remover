@@ -11,7 +11,7 @@ user_agent = 'Duplicate Remover (by /u/impshum)'
 
 target_subreddit = 'XXXX'
 
-send_message = 0
+send_message = 1
 delete_post = 1
 
 reddit = praw.Reddit(client_id=client_id,
@@ -41,15 +41,6 @@ def do_db(token, id):
         return True
 
 
-def delete_post(comment, user, body):
-    if send_message:
-        msg = f'Your comment has been removed from {target_subreddit} as it has already been posted. Sorry.'
-        reddit.redditor(user).message('Oh noes!', msg)
-    if delete_post:
-        comment.mod.remove()
-        print(f'Deleted duplicate: {body}')
-
-
 def stream():
     print('\nStarting the stream\n')
     start = time()
@@ -63,7 +54,7 @@ def stream():
                 if do_db(body, id):
                     print(f'New comment: {body}')
                 else:
-                    delete_post(comment, user, body)
+                    response(comment, user, body)
 
 
 def history():
@@ -79,7 +70,16 @@ def history():
             if do_db(body, id):
                 print(f'New comment: {body}')
             else:
-                delete_post(comment, user, body)
+                response(comment, user, body)
+
+
+def response(comment, user, body):
+    if send_message:
+        msg = f'Your comment has been removed from {target_subreddit} as it has already been posted. Sorry.'
+        reddit.redditor(user).message('Oh noes!', msg)
+    if delete_post:
+        comment.mod.delete()
+        print(f'Deleted duplicate: {body}')
 
 
 history()
