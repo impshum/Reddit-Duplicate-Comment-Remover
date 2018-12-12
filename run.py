@@ -11,8 +11,8 @@ user_agent = 'Duplicate Remover (by /u/impshum)'
 
 target_subreddit = 'XXXX'
 
-send_message = 1
-delete_post = 1
+send_message = 0
+delete_post = 0
 
 reddit = praw.Reddit(client_id=client_id,
                      client_secret=client_secret,
@@ -48,7 +48,7 @@ def stream():
         if comment.created_utc > start:
             id = comment.id
             user = comment.author.name
-            body = comment.body.replace('*', '').strip().lower()
+            body = comment.body.replace('*', '').replace('\n', '').strip().lower()
             special_threads = get_threads()
             if comment.submission in special_threads:
                 if do_db(body, id):
@@ -65,12 +65,13 @@ def history():
         submission.comments.replace_more(limit=None)
         for comment in submission.comments.list():
             id = comment.id
-            user = comment.author.name
-            body = comment.body.replace('*', '').strip().lower()
-            if do_db(body, id):
-                print(f'New comment: {body}')
-            else:
-                response(comment, user, body)
+            if comment.author:
+                user = comment.author.name
+                body = comment.body.replace('*', '').replace('\n', '').strip().lower()
+                if do_db(body, id):
+                    print(f'New comment: {body}')
+                else:
+                    response(comment, user, body)
 
 
 def response(comment, user, body):
