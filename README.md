@@ -1,6 +1,6 @@
 # Reddit Duplicate Comment Remover
 
-Python bot to remove duplicate comments on targeted threads.
+Python bot to remove duplicate comments on targeted threads. Runs 24/7.
 
 - Runs 24/7.
 - Allows adding new target threads whilst running.
