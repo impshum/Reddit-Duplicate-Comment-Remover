@@ -41,7 +41,7 @@ def do_db(token, id):
         return True
 
 
-def delete_post():
+def delete_post(comment, user, body):
     if send_message:
         msg = f'Your comment has been removed from {target_subreddit} as it has already been posted. Sorry.'
         reddit.redditor(user).message('Oh noes!', msg)
