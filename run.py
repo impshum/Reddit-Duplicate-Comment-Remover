@@ -9,15 +9,16 @@ reddit_user = 'XXXX'
 reddit_pass = 'XXXX'
 user_agent = 'Duplicate Remover (by /u/impshum)'
 
-target_subreddit = 'FizzMobile'
+target_subreddit = 'XXXX'
+
+send_message = 0
+delete_post = 1
 
 reddit = praw.Reddit(client_id=client_id,
                      client_secret=client_secret,
                      user_agent=user_agent,
                      username=reddit_user,
                      password=reddit_pass)
-
-start = time()
 
 
 def get_threads():
@@ -27,30 +28,59 @@ def get_threads():
     return data
 
 
-def do_db(token, name):
+def do_db(token, id):
     with open('data.json') as f:
         data = json.load(f)
-    if data.get(token):
+    gotcha = data.get(token)
+    if gotcha and gotcha != id:
         return False
     else:
-        data.update({token: name})
+        data.update({token: id})
         with open('data.json', 'w') as f:
             json.dump(data, f)
         return True
 
 
-print('\nStarting the stream\n')
+def delete_post():
+    if send_message:
+        msg = f'Your comment has been removed from {target_subreddit} as it has already been posted. Sorry.'
+        reddit.redditor(user).message('Oh noes!', msg)
+    if delete_post:
+        comment.delete()
+        print(f'Deleted duplicate: {body}')
 
-for comment in reddit.subreddit(target_subreddit).stream.comments():
-    if comment.created_utc > start:
-        body = comment.body.replace('*', '').strip().lower()
-        user = comment.author.name
-        special_threads = get_threads()
-        if comment.submission in special_threads:
-            if do_db(body, user):
+
+def stream():
+    print('\nStarting the stream\n')
+    start = time()
+    for comment in reddit.subreddit(target_subreddit).stream.comments():
+        if comment.created_utc > start:
+            id = comment.id
+            user = comment.author.name
+            body = comment.body.replace('*', '').strip().lower()
+            special_threads = get_threads()
+            if comment.submission in special_threads:
+                if do_db(body, id):
+                    print(f'New comment: {body}')
+                else:
+                    delete_post(comment, user, body)
+
+
+def history():
+    print('\nTrawling through old comments\n')
+    special_threads = get_threads()
+    for thread in special_threads:
+        submission = reddit.submission(id=thread)
+        submission.comments.replace_more(limit=None)
+        for comment in submission.comments.list():
+            id = comment.id
+            user = comment.author.name
+            body = comment.body.replace('*', '').strip().lower()
+            if do_db(body, id):
                 print(f'New comment: {body}')
             else:
-                comment.delete()
-                msg = f'Your comment has been removed from {target_subreddit} as it has already been posted. Sorry.'
-                reddit.redditor(user).message('Oh noes!', msg)
-                print(f'Deleted duplicate: {body}')
+                delete_post(comment, user, body)
+
+
+history()
+stream()
