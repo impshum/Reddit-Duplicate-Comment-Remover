@@ -78,7 +78,8 @@ def response(comment, user, body):
         msg = f'Your comment has been removed from {target_subreddit} as it has already been posted. Sorry.'
         reddit.redditor(user).message('Oh noes!', msg)
     if delete_post:
-        comment.mod.delete()
+        comment.mod.remove()
+        #comment.delete()
         print(f'Deleted duplicate: {body}')
 
 
