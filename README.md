@@ -2,6 +2,9 @@
 
 Python bot to remove duplicate comments on targeted threads.
 
+- Runs 24/7.
+- Allows adding new target threads whilst running.
+
 ![alt text](https://i.imgur.com/Inn0n7w.png)
 
 ### Install dependencies
