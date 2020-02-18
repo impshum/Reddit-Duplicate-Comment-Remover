@@ -1,88 +1,115 @@
 import praw
-import json
-from time import time
+import configparser
+import re
+import argparse
+import schedule
+from time import sleep
 
 
-client_id = 'XXXX'
-client_secret = 'XXXX'
-reddit_user = 'XXXX'
-reddit_pass = 'XXXX'
-user_agent = 'Duplicate Remover (by /u/impshum)'
+parser = argparse.ArgumentParser(
+    description='Duplicate Comment Remover v2 (by /u/impshum)')
+parser.add_argument(
+    '-t', '--test', help='test mode', action='store_true')
+parser.add_argument(
+    '-u', '--user', help='target individual user', type=str)
+parser.add_argument(
+    '-o', '--once', help='run only once', action='store_true')
+args = parser.parse_args()
 
-target_subreddit = 'XXXX'
+test_mode, target_user, once_mode = False, False, False
 
-send_message = 0
-delete_post = 0
+if args.test:
+    test_mode = True
+
+if args.user:
+    target_user = args.user
+
+if args.once:
+    once_mode = True
+
+config = configparser.ConfigParser()
+config.read('conf.ini')
+reddit_user = config['REDDIT']['reddit_user']
+reddit_pass = config['REDDIT']['reddit_pass']
+client_id = config['REDDIT']['client_id']
+client_secret = config['REDDIT']['client_secret']
+target_subreddit = config['SETTINGS']['target_subreddit']
+submission_limit = int(config['SETTINGS']['submission_limit'])
+sleep_time = int(config['SETTINGS']['sleep_time'])
 
 reddit = praw.Reddit(client_id=client_id,
                      client_secret=client_secret,
-                     user_agent=user_agent,
                      username=reddit_user,
-                     password=reddit_pass)
+                     password=reddit_pass,
+                     user_agent='Duplicate Comment Remover v2 (by /u/impshum)')
+
+removed = ['[deleted]', '[removed]']
 
 
-def get_threads():
-    with open('threads.txt') as f:
-        data = f.readlines()
-        data = [x.strip() for x in data]
-    return data
+class C:
+    W, G, R, Y = '\033[0m', '\033[92m', '\033[91m', '\033[93m'
 
 
-def do_db(token, id):
-    with open('data.json') as f:
-        data = json.load(f)
-    gotcha = data.get(token)
-    if gotcha and gotcha != id:
-        return False
-    else:
-        data.update({token: id})
-        with open('data.json', 'w') as f:
-            json.dump(data, f)
-        return True
+def remove_emoji(string):
+    emoji_pattern = re.compile('['
+                               u'\U0001F600-\U0001F64F'
+                               u'\U0001F300-\U0001F5FF'
+                               u'\U0001F680-\U0001F6FF'
+                               u'\U0001F1E0-\U0001F1FF'
+                               u'\U00002702-\U000027B0'
+                               u'\U000024C2-\U0001F251'
+                               ']+', flags=re.UNICODE)
+    return emoji_pattern.sub(r'', string)
 
 
-def stream():
-    print('\nStarting the stream\n')
-    start = time()
-    for comment in reddit.subreddit(target_subreddit).stream.comments():
-        if comment.created_utc > start:
-            id = comment.id
-            user = comment.author.name
-            body = comment.body.replace('*', '').replace('\n', '').strip().lower()
-            special_threads = get_threads()
-            if comment.submission in special_threads:
-                if do_db(body, id):
-                    print(f'New comment: {body}')
-                else:
-                    response(comment, user, body)
-
-
-def history():
-    print('\nTrawling through old comments\n')
-    special_threads = get_threads()
-    for thread in special_threads:
-        submission = reddit.submission(id=thread)
+def runner():
+    for submission in reddit.subreddit(target_subreddit).new(limit=submission_limit):
+        thread = {}
+        uniques = []
+        duplicates = []
+        title = submission.title
         submission.comments.replace_more(limit=None)
+
         for comment in submission.comments.list():
-            id = comment.id
-            if comment.author:
-                user = comment.author.name
-                body = comment.body.replace('*', '').replace('\n', '').strip().lower()
-                if do_db(body, id):
-                    print(f'New comment: {body}')
-                else:
-                    response(comment, user, body)
+            if comment.author and not comment.locked and comment.author not in removed and comment.body not in removed:
+                id = comment.id
+                created = comment.created_utc
+                body = remove_emoji(comment.body).replace(
+                    '*', '').replace(' ', '').replace('\n', '').lower()
+
+                if target_user and target_user == comment.author.name:
+                    thread.update({created: {'id': id, 'body': body}})
+                elif not target_user:
+                    thread.update({created: {'id': id, 'body': body}})
+
+        for k, v in sorted(thread.items()):
+            id = v['id']
+            body = v['body']
+
+            if body in uniques:
+                duplicates.append(id)
+            else:
+                uniques.append(body)
+
+        if len(title) > 80:
+            title = f'{title[0:80].strip()}...'
+
+        print(f'{C.R}{len(duplicates)}{C.W}/{C.G}{len(uniques)} {C.W}{title}{C.W}')
+        for duplicate in duplicates:
+            if not test_mode:
+                comment = reddit.comment(duplicate)
+                comment.mod.lock()
+                comment.mod.remove()
 
 
-def response(comment, user, body):
-    if send_message:
-        msg = f'Your comment has been removed from {target_subreddit} as it has already been posted. Sorry.'
-        reddit.redditor(user).message('Oh noes!', msg)
-    if delete_post:
-        comment.mod.remove()
-        #comment.delete()
-        print(f'Deleted duplicate: {body}')
+def main():
+    runner()
+    if not once_mode:
+        schedule.every(sleep_time).minutes.do(runner)
+        while True:
+            schedule.run_pending()
+            sleep(1)
 
 
-history()
-stream()
+if __name__ == '__main__':
+    main()

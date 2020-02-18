@@ -1,0 +1,4 @@
+praw
+configparser
+re
+argparse
