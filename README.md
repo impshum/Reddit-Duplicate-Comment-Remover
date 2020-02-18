@@ -1,4 +1,4 @@
-## Reddit Duplicate Comment Remover
+## Reddit Duplicate Comment Remover v2
 
 Removes duplicate comments on subreddit/s. Can be used to target individual users.
 
